@@ -528,10 +528,18 @@ def build_html_report(data: dict) -> str:
     reg_balance = reg.get("balance_mwh", 0)
     nr_balance = nr.get("balance_mwh", 0)
 
+    # Cobertura NR después de bilaterales para el tile superior
+    nr_demand = nr.get("demand_mwh", 0)
+    nr_contracts = nr.get("contracts_mwh", 0)
+    nr_sell_mwh = nr.get("bolsa_sell_mwh", 0)
+    nr_bilateral = max(0.0, (nr_contracts - nr_demand) - nr_sell_mwh)
+    nr_net_remaining = nr_contracts - nr_bilateral
+    nr_cov_net = nr_net_remaining / nr_demand * 100 if nr_demand > 0 else 0
+
     reg_tile_cls = "bad" if reg_cov < 80 else "good"
-    nr_tile_cls = "good" if nr_cov >= 100 else ("bad" if nr_cov < 80 else "neutral")
+    nr_tile_cls = "good" if nr_cov_net >= 100 else ("bad" if nr_cov_net < 80 else "neutral")
     reg_fill_cls = "bad" if reg_cov < 80 else "good"
-    nr_fill_cls = "good" if nr_cov >= 80 else "bad"
+    nr_fill_cls = "good" if nr_cov_net >= 80 else "bad"
 
     net_cop = reg.get("bolsa_buy_cop", 0) - nr.get("bolsa_sell_cop", 0)
     net_sign = "−" if net_cop < 0 else "+"
@@ -549,10 +557,10 @@ def build_html_report(data: dict) -> str:
       {_cov_bar(reg_cov, reg_fill_cls)}
     </div>
     <div class="mtile {nr_tile_cls}">
-      <div class="mt-lbl">Cobertura no regulado</div>
-      <div class="mt-val {nr_tile_cls}">{_pct(nr_cov)}</div>
-      <div class="mt-desc">{"excedente — " + _gwh(nr_balance) + " sobre demanda" if nr_balance > 0 else "posición balanceada"}</div>
-      {_cov_bar(nr_cov, nr_fill_cls)}
+      <div class="mt-lbl">Cobertura no regulado <span style="font-weight:400;text-transform:none;letter-spacing:0">· tras bilaterales</span></div>
+      <div class="mt-val {nr_tile_cls}">{_pct(nr_cov_net)}</div>
+      <div class="mt-desc">bruto {_pct(nr_cov)} · neto tras ventas bilaterales est.</div>
+      {_cov_bar(nr_cov_net, nr_fill_cls)}
     </div>
     <div class="mtile neutral">
       <div class="mt-lbl">Impacto neto bolsa · mes</div>
