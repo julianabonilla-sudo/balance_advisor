@@ -1,0 +1,36 @@
+name: Daily Energy Balance Report
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 8:00 AM Colombia (UTC-5), lunes a domingo
+  workflow_dispatch:         # también permite correrlo manualmente desde GitHub
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Generar y enviar reporte
+        env:
+          OLIBIA_API_KEY: ${{ secrets.OLIBIA_API_KEY }}
+          OLIBIA_BASE_URL: ${{ secrets.OLIBIA_BASE_URL }}
+          OLIBIA_USER_EMAIL: ${{ secrets.OLIBIA_USER_EMAIL }}
+          OLIBIA_USER_ID: ${{ secrets.OLIBIA_USER_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEFAULT_VERSION_NAME: ${{ secrets.DEFAULT_VERSION_NAME }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
+        run: python main.py --html --email --no-save

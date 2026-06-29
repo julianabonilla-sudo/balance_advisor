@@ -59,12 +59,12 @@ def _run_advisor(args: list[str]) -> None:
 
 
 def _run_html(args: list[str]) -> None:
-    """Executive HTML report — opens in browser."""
-    import webbrowser
+    """Executive HTML report — opens in browser and/or sends by email."""
     from datetime import date
     from src.report_html import run_html_report
 
     save_snap = "--no-save" not in args
+    send_email = "--email" in args
     numeric = [a for a in args if a.lstrip("-").isdigit() and not a.startswith("--")]
     year = month = None
     if len(numeric) >= 2:
@@ -80,10 +80,15 @@ def _run_html(args: list[str]) -> None:
     today = date.today()
     out_path = out_dir / f"advisor-{today}.html"
     out_path.write_text(html, encoding="utf-8")
+    print(f"  Reporte guardado: {out_path}")
 
-    abs_path = out_path.resolve()
-    webbrowser.open(abs_path.as_uri())
-    print(f"  Reporte guardado y abierto: {out_path}\n")
+    if send_email:
+        from src.report_html.emailer import send_report
+        send_report(html)
+    else:
+        import webbrowser
+        webbrowser.open(out_path.resolve().as_uri())
+        print(f"  Abierto en navegador\n")
 
 
 def _run_chat() -> None:
