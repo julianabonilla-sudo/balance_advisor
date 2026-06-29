@@ -120,13 +120,11 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
         bilateral_cop = bilateral_mwh * nr_floor * 1_000
         bolsa_avg = sell_cop / (sell_mwh * 1_000) if sell_mwh > 0 else 0
         gain = nr_floor - bolsa_avg
+        # Cobertura después de bilaterales: (contratos - vendido bilateral) / demanda
+        net_remaining = contracts - bilateral_mwh
+        cov_despues = net_remaining / demand * 100 if demand > 0 else 0
+        cov_despues_cls = "good" if cov_despues >= 80 else "bad"
         body_rows = f"""
-    <div class="mkt-row">
-      <span class="mkt-row-l">Excedente bruto sobre demanda</span>
-      <div class="mkt-row-r">
-        <div class="mkt-row-v" style="color:var(--good)">{_sign(balance)}{_gwh(balance)}</div>
-      </div>
-    </div>
     <div class="mkt-row">
       <span class="mkt-row-l">Venta contratos MNR (est.)</span>
       <div class="mkt-row-r">
@@ -146,6 +144,34 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
             f'genera +{gain:,.0f} COP/kWh por MWh adicional.</div>'
             if sell_mwh > 0 and gain > 0 else ""
         )
+        nr_cov_header = f"""
+    <div class="mkt-cov-pair">
+      <div class="mkt-cov-block">
+        <div class="mkt-cov-sublbl">Antes de bilaterales</div>
+        <div class="mkt-cov-num {cov_num_cls}">{_pct(cov)}</div>
+        <div class="mkt-cov-ctx-sm">{_gwh(contracts)} contratos / {_gwh(demand)} demanda</div>
+        {_cov_bar(cov, cov_fill_cls)}
+      </div>
+      <div class="mkt-cov-sep">→</div>
+      <div class="mkt-cov-block">
+        <div class="mkt-cov-sublbl">Después de bilaterales</div>
+        <div class="mkt-cov-num {cov_despues_cls}">{_pct(cov_despues)}</div>
+        <div class="mkt-cov-ctx-sm">{_gwh(net_remaining)} disponible / {_gwh(demand)} demanda</div>
+        {_cov_bar(cov_despues, cov_despues_cls)}
+      </div>
+    </div>"""
+        return f"""
+<div class="mkt-card" style="border-left:4px solid {border_color}">
+  <div class="mkt-head">
+    <span class="mkt-head-lbl">{title}</span>
+    <span class="pill {pill_cls}">{pill_txt}</span>
+  </div>
+  <div class="mkt-body">
+    {nr_cov_header}
+    <div class="mkt-rows">{body_rows}</div>
+    {insight}
+  </div>
+</div>"""
 
     return f"""
 <div class="mkt-card" style="border-left:4px solid {border_color}">
@@ -396,7 +422,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
 .cov-fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px}
 .cov-fill.bad{background:var(--bad)}.cov-fill.good{background:var(--good)}.cov-fill.brand{background:var(--brand)}
 .cov-threshold{position:absolute;left:80%;top:-4px;bottom:-4px;width:2px;background:var(--warn);border-radius:1px}
-.cov-threshold::after{content:'80%';position:absolute;top:-15px;left:-6px;font-size:9px;color:var(--warn);font-weight:700;white-space:nowrap}
+.cov-threshold::after{content:'80%';position:absolute;top:8px;left:-6px;font-size:9px;color:var(--warn);font-weight:700;white-space:nowrap}
 .prices-bar{display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:18px}
 .price-item{padding:12px 16px;border-right:1px solid var(--border)}
 .price-item:last-child{border-right:none}
@@ -415,6 +441,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
 .mkt-cov-num{font-size:38px;font-weight:800;line-height:1}
 .mkt-cov-num.bad{color:var(--bad)}.mkt-cov-num.good{color:var(--good)}
 .mkt-cov-ctx{text-align:right;font-size:12px;color:var(--sec);line-height:1.6}
+.mkt-cov-pair{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.mkt-cov-block{flex:1;min-width:0}
+.mkt-cov-sublbl{font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.mkt-cov-ctx-sm{font-size:10px;color:var(--sec);margin-top:2px;margin-bottom:4px;line-height:1.4}
+.mkt-cov-sep{font-size:18px;color:#DDD6FE;padding-top:28px;flex-shrink:0}
 .mkt-rows{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:7px}
 .mkt-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px}
 .mkt-row-l{color:var(--sec)}
