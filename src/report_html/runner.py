@@ -301,4 +301,4 @@ def run_html_report(
     }
 
     print("  Generando HTML…")
-    return build_html_report(data)
+    return build_html_report(data), data

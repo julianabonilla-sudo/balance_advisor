@@ -73,7 +73,7 @@ def _run_html(args: list[str]) -> None:
     print("\n⚡ Energy Balance Advisor — Reporte Ejecutivo HTML")
     print("─" * 46)
 
-    html = run_html_report(year=year, month=month, save_snap=save_snap)
+    html, report_data = run_html_report(year=year, month=month, save_snap=save_snap)
 
     out_dir = Path("reports")
     out_dir.mkdir(exist_ok=True)
@@ -84,7 +84,7 @@ def _run_html(args: list[str]) -> None:
 
     if send_email:
         from src.report_html.emailer import send_report
-        send_report(html)
+        send_report(html, report_data)
     else:
         import webbrowser
         webbrowser.open(out_path.resolve().as_uri())
