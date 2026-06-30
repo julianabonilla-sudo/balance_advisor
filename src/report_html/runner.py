@@ -149,6 +149,7 @@ def run_html_report(
         dashboard = olibia.balance.dashboard(year, month, vname)
         analysis = olibia.balance.analysis(year, month, vname)
         bolsa_summary = olibia.balance.bolsa_summary(year, month, vname)
+        income_stmt = olibia.balance.income_statement(year, month, vname)
 
         propio = bolsa_summary.get("propio", {})
         bolsa_price = propio.get("buy_price", 0)
@@ -161,6 +162,20 @@ def run_html_report(
             sum(c.get("price", 0) * c.get("qty", 0) for c in nr_contracts) / total_qty_nr
             if total_qty_nr > 0 else bolsa_sell_price
         )
+
+        # Bilaterales NR reales desde income_statement (VENTA NR, excluye Demanda y Bolsa)
+        bilateral_nr_kwh = 0.0
+        bilateral_nr_cop = 0.0
+        for section in income_stmt.get("sections", []):
+            if section.get("id") == "venta":
+                for sub in section.get("sub_items", []):
+                    if "No Regulado" in sub.get("label", ""):
+                        for item in sub.get("items", []):
+                            if item.get("agente") not in ("Demanda", "Bolsa"):
+                                bilateral_nr_kwh += item.get("cantidad_kwh", 0)
+                                bilateral_nr_cop += item.get("total_cop", 0)
+        bilateral_nr_mwh = bilateral_nr_kwh / 1_000
+        bilateral_nr_avg_price = bilateral_nr_cop / bilateral_nr_kwh if bilateral_nr_kwh > 0 else 0
 
         kpis = dashboard.get("kpis", {})
         reg = kpis.get("regulado", {})
@@ -272,7 +287,13 @@ def run_html_report(
             "avg_nr_buy_price": avg_nr_buy_price,
         },
         "regulado": {**reg, "coverage_pct": round(reg_cov, 1)},
-        "no_regulado": {**nr, "coverage_pct": round(nr_cov, 1)},
+        "no_regulado": {
+            **nr,
+            "coverage_pct": round(nr_cov, 1),
+            "bilateral_mwh": bilateral_nr_mwh,
+            "bilateral_cop": bilateral_nr_cop,
+            "bilateral_avg_price": bilateral_nr_avg_price,
+        },
         "total": total,
         "day_diff": day_diff,
         "future_months": future_months,

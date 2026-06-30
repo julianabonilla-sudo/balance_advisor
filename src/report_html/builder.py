@@ -55,8 +55,7 @@ def _summary_text(reg: dict, nr: dict) -> str:
         f'En <strong>regulado</strong> tenemos cobertura del <strong style="color:var(--good)">{_pct(reg_cov)}</strong> — posición superavitaria.'
     )
 
-    nr_gross = nr.get("contracts_mwh", 0) - nr.get("demand_mwh", 0)
-    nr_bilateral = max(0.0, nr_gross - nr.get("bolsa_sell_mwh", 0))
+    nr_bilateral = nr.get("bilateral_mwh", 0) or max(0.0, nr.get("contracts_mwh", 0) - nr.get("demand_mwh", 0) - nr.get("bolsa_sell_mwh", 0))
     nr_bolsa_mwh = nr.get("bolsa_sell_mwh", 0)
     nr_part = (
         f'En <strong>no regulado</strong> cubrimos el <strong style="color:var(--good)">{_pct(nr_cov)}</strong> '
@@ -115,11 +114,16 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
         insight = ""
     else:
         nr_floor = prices.get("avg_nr_buy_price", 0)
-        gross_surplus = contracts - demand
-        bilateral_mwh = max(0.0, gross_surplus - sell_mwh)
-        bilateral_cop = bilateral_mwh * nr_floor * 1_000
+        # Bilaterales reales desde income_statement (no estimado)
+        bilateral_mwh = kpis.get("bilateral_mwh", 0)
+        bilateral_cop = kpis.get("bilateral_cop", 0)
+        if bilateral_mwh == 0:
+            # Fallback estimación si no viene del endpoint
+            bilateral_mwh = max(0.0, (contracts - demand) - sell_mwh)
+            bilateral_cop = bilateral_mwh * nr_floor * 1_000
         bolsa_avg = sell_cop / (sell_mwh * 1_000) if sell_mwh > 0 else 0
-        gain = nr_floor - bolsa_avg
+        bilateral_avg = kpis.get("bilateral_avg_price", bilateral_cop / (bilateral_mwh * 1_000) if bilateral_mwh > 0 else nr_floor)
+        gain = bilateral_avg - bolsa_avg
         # Cobertura después de bilaterales: (contratos - vendido bilateral) / demanda
         net_remaining = contracts - bilateral_mwh
         cov_despues = net_remaining / demand * 100 if demand > 0 else 0
@@ -129,7 +133,7 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
       <span class="mkt-row-l">Venta contratos MNR (est.)</span>
       <div class="mkt-row-r">
         <div class="mkt-row-v" style="color:var(--good)">{_gwh(bilateral_mwh)}</div>
-        <div class="mkt-row-s">~{_m(bilateral_cop)} · &gt;{_ckwh(nr_floor)} objetivo</div>
+        <div class="mkt-row-s">{_m(bilateral_cop)} · {_ckwh(bilateral_avg)} prom.</div>
       </div>
     </div>
     <div class="mkt-row">
@@ -532,7 +536,7 @@ def build_html_report(data: dict) -> str:
     nr_demand = nr.get("demand_mwh", 0)
     nr_contracts = nr.get("contracts_mwh", 0)
     nr_sell_mwh = nr.get("bolsa_sell_mwh", 0)
-    nr_bilateral = max(0.0, (nr_contracts - nr_demand) - nr_sell_mwh)
+    nr_bilateral = nr.get("bilateral_mwh", 0) or max(0.0, (nr_contracts - nr_demand) - nr_sell_mwh)
     nr_net_remaining = nr_contracts - nr_bilateral
     nr_cov_net = nr_net_remaining / nr_demand * 100 if nr_demand > 0 else 0
 
