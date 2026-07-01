@@ -94,6 +94,11 @@ def _build_email_html(data: dict) -> str:
 
     bolsa_price = prices.get("bolsa_price", 0)
 
+    reg_buy_sug = reg.get("buy_suggestion_mwh", 0)
+    reg_sell_sug = reg.get("sell_suggestion_mwh", 0)
+    nr_buy_sug = nr.get("buy_suggestion_mwh", 0)
+    nr_sell_sug = nr.get("sell_suggestion_mwh", 0)
+
     has_alert = reg_cov < 80.0
     reg_color = "#D97706" if reg_cov < 80 else "#059669"
     nr_net_color = "#059669" if nr_cov_net >= 80 else "#D97706"
@@ -121,6 +126,22 @@ def _build_email_html(data: dict) -> str:
         nr_badge = _badge("Posici&#243;n cubierta", "#D1FAE5", "#065F46")
     else:
         nr_badge = _badge("Compra recomendada", "#FEF3C7", "#92400E")
+
+    def _sug_line(buy_mwh: float, sell_mwh: float) -> str:
+        if buy_mwh > 0:
+            return (
+                f'<p style="margin:6px 0 0;font-size:10px;font-weight:600;'
+                f'color:#DC2626;">&#8595; Comprar {buy_mwh/1000:.1f} GWh &rarr; 80%</p>'
+            )
+        if sell_mwh > 0:
+            return (
+                f'<p style="margin:6px 0 0;font-size:10px;font-weight:600;'
+                f'color:#059669;">&#8593; Vender {sell_mwh/1000:.1f} GWh &rarr; 100%</p>'
+            )
+        return ""
+
+    reg_sug_line = _sug_line(reg_buy_sug, reg_sell_sug)
+    nr_sug_line = _sug_line(nr_buy_sug, nr_sell_sug)
 
     if has_alert:
         deficit = 80 - reg_cov
@@ -195,6 +216,7 @@ def _build_email_html(data: dict) -> str:
             <p style="margin:0;font-size:20px;font-weight:600;color:{reg_color};line-height:1;">{reg_cov:.0f}%</p>
             <p style="margin:3px 0 6px;font-size:10px;color:#9CA3AF;">{reg_dem_gwh:.1f} GWh demanda</p>
             {reg_badge}
+            {reg_sug_line}
           </td>
           <td width="3%">&nbsp;</td>
           <td style="width:31%;background:#ffffff;border:1px solid #E5E0FF;
@@ -203,6 +225,7 @@ def _build_email_html(data: dict) -> str:
             <p style="margin:0;font-size:20px;font-weight:600;color:{nr_net_color};line-height:1;">{nr_cov_net:.0f}%</p>
             <p style="margin:3px 0 6px;font-size:10px;color:#9CA3AF;">Tras bilaterales</p>
             {nr_badge}
+            {nr_sug_line}
           </td>
           <td width="3%">&nbsp;</td>
           <td style="width:31%;background:#ffffff;border:1px solid #E5E0FF;

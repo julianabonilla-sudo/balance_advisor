@@ -69,6 +69,14 @@ def _summary_text(reg: dict, nr: dict) -> str:
     return f"{reg_part} {nr_part}"
 
 
+def _suggest_box(buy_mwh: float, sell_mwh: float) -> str:
+    if buy_mwh > 0:
+        return f'<div class="suggest buy">↓ Comprar {_gwh(buy_mwh)} para alcanzar 80%</div>'
+    if sell_mwh > 0:
+        return f'<div class="suggest sell">↑ Vender {_gwh(sell_mwh)} para reducir a 100%</div>'
+    return ""
+
+
 def _cov_bar(pct: float, cls: str) -> str:
     fill_w = min(100, pct)
     return (
@@ -128,6 +136,8 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
         net_remaining = contracts - bilateral_mwh
         cov_despues = net_remaining / demand * 100 if demand > 0 else 0
         cov_despues_cls = "good" if cov_despues >= 80 else "bad"
+        nr_buy_sug = round(max(0.0, 0.80 * demand - net_remaining)) if cov_despues < 80 else 0
+        nr_sell_sug = round(max(0.0, net_remaining - demand)) if cov_despues > 100 else 0
         body_rows = f"""
     <div class="mkt-row">
       <span class="mkt-row-l">Venta contratos MNR (est.)</span>
@@ -162,6 +172,7 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
         <div class="mkt-cov-num {cov_despues_cls}">{_pct(cov_despues)}</div>
         <div class="mkt-cov-ctx-sm">{_gwh(net_remaining)} disponible / {_gwh(demand)} demanda</div>
         {_cov_bar(cov_despues, cov_despues_cls)}
+        {_suggest_box(nr_buy_sug, nr_sell_sug)}
       </div>
     </div>"""
         return f"""
@@ -177,6 +188,7 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
   </div>
 </div>"""
 
+    reg_sug = _suggest_box(kpis.get("buy_suggestion_mwh", 0), kpis.get("sell_suggestion_mwh", 0))
     return f"""
 <div class="mkt-card" style="border-left:4px solid {border_color}">
   <div class="mkt-head">
@@ -189,6 +201,7 @@ def _mkt_card(title: str, kpis: dict, prices: dict, is_reg: bool) -> str:
       <div class="mkt-cov-ctx">{_gwh(demand)} demanda<br>{_gwh(contracts)} contratos</div>
     </div>
     {_cov_bar(cov, cov_fill_cls)}
+    {reg_sug}
     <div class="mkt-rows">{body_rows}</div>
     {insight}
   </div>
@@ -346,11 +359,13 @@ def _future_row(m: dict) -> str:
     ctext = m["change_text"]
     is_flip = ctype == "warning"
 
-    def badge(sig):
+    def badge(sig, buy_mwh=0, sell_mwh=0):
+        mwh = buy_mwh or sell_mwh
+        qty = f'<div class="sbadge-qty">{_gwh(mwh)}</div>' if mwh > 0 else ""
         if sig == "COMPRA":
-            return '<span class="sbadge buy">↓ compra</span>'
+            return f'<span class="sbadge buy">↓ compra</span>{qty}'
         if sig == "VENTA":
-            return '<span class="sbadge sell">↑ venta</span>'
+            return f'<span class="sbadge sell">↑ venta</span>{qty}'
         return '<span class="sbadge none">—</span>'
 
     def chg():
@@ -367,8 +382,8 @@ def _future_row(m: dict) -> str:
   <td class="r {_pct_cls(reg_cov)}">{_pct(reg_cov)}</td>
   <td class="r {_pct_cls(nr_cov)}">{_pct(nr_cov)}</td>
   <td class="r">{sign}{bal} GWh</td>
-  <td>{badge(sig_reg)}</td>
-  <td>{badge(sig_nr)}</td>
+  <td>{badge(sig_reg, buy_mwh=m.get("reg_buy_mwh", 0), sell_mwh=m.get("reg_sell_mwh", 0))}</td>
+  <td>{badge(sig_nr, buy_mwh=m.get("nr_buy_mwh", 0), sell_mwh=m.get("nr_sell_mwh", 0))}</td>
   <td>{chg()}</td>
 </tr>"""
 
@@ -500,6 +515,9 @@ tr.flip-row{background:#FFFBEB}
 .chg-info{font-size:11px;color:#1D4ED8;line-height:1.4}
 .legend{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.8;padding:0 2px}
 .no-diff{font-size:13px;color:var(--muted);padding:16px 0}
+.suggest{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:4px;margin-top:8px}
+.suggest.buy{background:var(--bad-bg);color:var(--bad)}.suggest.sell{background:var(--good-bg);color:var(--good)}
+.sbadge-qty{font-size:10px;color:var(--sec);display:block;margin-top:2px;font-weight:400}
 """
 
 _JS = """
@@ -545,6 +563,11 @@ def build_html_report(data: dict) -> str:
     reg_fill_cls = "bad" if reg_cov < 80 else "good"
     nr_fill_cls = "good" if nr_cov_net >= 80 else "bad"
 
+    reg_buy_sug = reg.get("buy_suggestion_mwh", 0)
+    reg_sell_sug = reg.get("sell_suggestion_mwh", 0)
+    nr_buy_sug_tile = round(max(0.0, 0.80 * nr_demand - nr_net_remaining)) if nr_cov_net < 80 else 0
+    nr_sell_sug_tile = round(max(0.0, nr_net_remaining - nr_demand)) if nr_cov_net > 100 else 0
+
     net_cop = reg.get("bolsa_buy_cop", 0) - nr.get("bolsa_sell_cop", 0)
     net_sign = "−" if net_cop < 0 else "+"
     net_label = "ingreso neto: ventas NR superan compras R" if net_cop < 0 else "costo neto en bolsa ambos mercados"
@@ -559,12 +582,14 @@ def build_html_report(data: dict) -> str:
       <div class="mt-val {reg_tile_cls}">{_pct(reg_cov)}</div>
       <div class="mt-desc">umbral mínimo 80%{"  — déficit activo" if reg_cov < 80 else ""}</div>
       {_cov_bar(reg_cov, reg_fill_cls)}
+      {_suggest_box(reg_buy_sug, reg_sell_sug)}
     </div>
     <div class="mtile {nr_tile_cls}">
       <div class="mt-lbl">Cobertura no regulado <span style="font-weight:400;text-transform:none;letter-spacing:0">· tras bilaterales</span></div>
       <div class="mt-val {nr_tile_cls}">{_pct(nr_cov_net)}</div>
       <div class="mt-desc">bruto {_pct(nr_cov)} · neto tras ventas bilaterales est.</div>
       {_cov_bar(nr_cov_net, nr_fill_cls)}
+      {_suggest_box(nr_buy_sug_tile, nr_sell_sug_tile)}
     </div>
     <div class="mtile neutral">
       <div class="mt-lbl">Impacto neto bolsa · mes</div>

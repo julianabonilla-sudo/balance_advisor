@@ -182,8 +182,13 @@ def run_html_report(
         nr = kpis.get("no_regulado", {})
         total = kpis.get("total", {})
 
-        reg_cov = reg.get("contracts_mwh", 0) / reg.get("demand_mwh", 1) * 100 if reg.get("demand_mwh") else 0
-        nr_cov = nr.get("contracts_mwh", 0) / nr.get("demand_mwh", 1) * 100 if nr.get("demand_mwh") else 0
+        reg_demand_val = reg.get("demand_mwh", 0)
+        reg_contracts_val = reg.get("contracts_mwh", 0)
+        nr_demand_val = nr.get("demand_mwh", 0)
+        nr_contracts_val = nr.get("contracts_mwh", 0)
+
+        reg_cov = reg_contracts_val / reg_demand_val * 100 if reg_demand_val else 0
+        nr_cov = nr_contracts_val / nr_demand_val * 100 if nr_demand_val else 0
 
         daily_balance = dashboard.get("daily_balance") or []
         day_diff = _compute_day_diff(daily_balance, bolsa_sell_price=bolsa_sell_price)
@@ -251,6 +256,10 @@ def run_html_report(
                     "signal_nr": sig_nr,
                     "change_type": change_type,
                     "change_text": change_text,
+                    "reg_buy_mwh": round(max(0.0, 0.80 * demand_reg2 - contracts_reg2)) if cov_reg2 < 80 else 0,
+                    "reg_sell_mwh": round(max(0.0, contracts_reg2 - demand_reg2)) if cov_reg2 > 100 else 0,
+                    "nr_buy_mwh": round(max(0.0, 0.80 * demand_nr2 - contracts_nr2)) if cov_nr2 < 80 else 0,
+                    "nr_sell_mwh": round(max(0.0, contracts_nr2 - demand_nr2)) if cov_nr2 > 100 else 0,
                 })
                 snap_month_datas.append(MonthData(
                     year=y, month=mo, balance_mwh=balance_mwh2,
@@ -270,6 +279,9 @@ def run_html_report(
 
     flip_months = [m for m in future_months if m["change_type"] == "warning"]
 
+    nr_net_val = nr_contracts_val - bilateral_nr_mwh
+    nr_cov_net_val = nr_net_val / nr_demand_val * 100 if nr_demand_val > 0 else 0
+
     data = {
         "meta": {
             "year": year, "month": month, "version_name": vname,
@@ -286,13 +298,20 @@ def run_html_report(
             "bolsa_sell_price": bolsa_sell_price,
             "avg_nr_buy_price": avg_nr_buy_price,
         },
-        "regulado": {**reg, "coverage_pct": round(reg_cov, 1)},
+        "regulado": {
+            **reg,
+            "coverage_pct": round(reg_cov, 1),
+            "buy_suggestion_mwh": round(max(0.0, 0.80 * reg_demand_val - reg_contracts_val)) if reg_cov < 80 else 0,
+            "sell_suggestion_mwh": round(max(0.0, reg_contracts_val - reg_demand_val)) if reg_cov > 100 else 0,
+        },
         "no_regulado": {
             **nr,
             "coverage_pct": round(nr_cov, 1),
             "bilateral_mwh": bilateral_nr_mwh,
             "bilateral_cop": bilateral_nr_cop,
             "bilateral_avg_price": bilateral_nr_avg_price,
+            "buy_suggestion_mwh": round(max(0.0, 0.80 * nr_demand_val - nr_net_val)) if nr_cov_net_val < 80 else 0,
+            "sell_suggestion_mwh": round(max(0.0, nr_net_val - nr_demand_val)) if nr_cov_net_val > 100 else 0,
         },
         "total": total,
         "day_diff": day_diff,
