@@ -155,25 +155,28 @@ def run_html_report(
         bolsa_price = propio.get("buy_price", 0)
         bolsa_sell_price = propio.get("sell_price", 0)
 
-        scatter = analysis.get("scatter_contracts", [])
-        nr_contracts = [c for c in scatter if "NO" in c.get("market", "").upper()]
-        total_qty_nr = sum(c.get("qty", 0) for c in nr_contracts)
-        avg_nr_buy_price = (
-            sum(c.get("price", 0) * c.get("qty", 0) for c in nr_contracts) / total_qty_nr
-            if total_qty_nr > 0 else bolsa_sell_price
-        )
-
-        # Bilaterales NR reales desde income_statement (VENTA NR, excluye Demanda y Bolsa)
+        # PPP compra MNR y bilaterales NR — ambos desde income_statement (fuente de verdad)
+        nr_compra_kwh = 0.0
+        nr_compra_cop = 0.0
         bilateral_nr_kwh = 0.0
         bilateral_nr_cop = 0.0
         for section in income_stmt.get("sections", []):
-            if section.get("id") == "venta":
-                for sub in section.get("sub_items", []):
-                    if "No Regulado" in sub.get("label", ""):
-                        for item in sub.get("items", []):
-                            if item.get("agente") not in ("Demanda", "Bolsa"):
-                                bilateral_nr_kwh += item.get("cantidad_kwh", 0)
-                                bilateral_nr_cop += item.get("total_cop", 0)
+            sid = section.get("id")
+            for sub in section.get("sub_items", []):
+                if "No Regulado" not in sub.get("label", ""):
+                    continue
+                for item in sub.get("items", []):
+                    kwh = item.get("cantidad_kwh", 0)
+                    cop = item.get("total_cop", 0)
+                    agente = item.get("agente", "")
+                    if sid == "compra":
+                        nr_compra_kwh += kwh
+                        nr_compra_cop += cop
+                    elif sid == "venta" and agente not in ("Demanda", "Bolsa"):
+                        bilateral_nr_kwh += kwh
+                        bilateral_nr_cop += cop
+
+        avg_nr_buy_price = nr_compra_cop / nr_compra_kwh if nr_compra_kwh > 0 else bolsa_sell_price
         bilateral_nr_mwh = bilateral_nr_kwh / 1_000
         bilateral_nr_avg_price = bilateral_nr_cop / bilateral_nr_kwh if bilateral_nr_kwh > 0 else 0
 
